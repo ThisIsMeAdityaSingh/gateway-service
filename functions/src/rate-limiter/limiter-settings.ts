@@ -18,4 +18,5 @@ export const rateLimiterSettings = {
     costOfRequest: 1,
     cleanUpWindow: 10 * 60 * 1000, // clean up memory every 10 mins
     requestIdGenerator: (request: Request) => request.ip,
+    skip: (request: Request) => false
 }
