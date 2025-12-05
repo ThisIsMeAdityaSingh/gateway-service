@@ -6,7 +6,7 @@ import {rateLimiterSettings, CustomRateLimiterSettings, RateLimitMapData} from "
 // importing cleanup service
 import {cleaupService} from "../utility/cleanup-service";
 
-export async function inMemoryRateLimiter(extraOptions?: CustomRateLimiterSettings) {
+export function inMemoryRateLimiter(extraOptions?: CustomRateLimiterSettings) {
     const rateSettings = {...rateLimiterSettings, ...extraOptions};
     const requestMap = new Map<string, RateLimitMapData>();
 

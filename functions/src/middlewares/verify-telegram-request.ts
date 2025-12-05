@@ -15,7 +15,7 @@ export async function verifyTelegramRequest(request: Request, response: Response
             return response.status(401).json(getErrorResponseObject("unauthorized"));
         }
 
-        next();
+        return next();
     } catch(error) {
         response.status(500).json(getErrorResponseObject("Something went wrong"));
     }

@@ -1,8 +1,12 @@
 import express, {Request, Response} from "express";
 import { verifyTelegramRequest } from "../middlewares/verify-telegram-request";
+import { inMemoryRateLimiter } from "../rate-limiter";
 
 const app = express();
 app.use(express.json());
+
+// custom in-memory rate limiter
+app.use(inMemoryRateLimiter());
 
 app.post('/telegram-webhook', verifyTelegramRequest, async function(request: Request, response: Response) {
     
