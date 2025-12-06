@@ -7,7 +7,8 @@ import { inMemoryRateLimiter } from "../rate-limiter";
 import telegramRouter from "./telegram";
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '5kb' }));
+app.use(express.urlencoded({ limit: '5kb', extended: true }));
 
 // custom in-memory rate limiter
 app.use(inMemoryRateLimiter());

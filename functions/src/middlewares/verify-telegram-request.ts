@@ -1,5 +1,5 @@
 import {Request, Response, NextFunction} from "express";
-import { getErrorResponseObject } from "../utility";
+import { ErrorType, GatewayError } from "../error";
 
 const TELEGRAM_SECRET = process.env.TELEGRAM_SECRET;
 
@@ -8,15 +8,22 @@ export async function verifyTelegramRequest(request: Request, response: Response
         const token = request.header('x-telegram-bot-api-secret-token');
 
         if (!TELEGRAM_SECRET) {
-            return response.status(500).json(getErrorResponseObject("Server misconfigured"));
+            throw new GatewayError("Server misconfiguration", ErrorType.CONFIGURATION_ERROR, 400);
         }
 
         if (token !== TELEGRAM_SECRET) {
-            return response.status(401).json(getErrorResponseObject("unauthorized"));
+            throw new GatewayError("Unauthorized", ErrorType.VALIDATION_ERROR, 400);
         }
 
         return next();
     } catch(error) {
-        response.status(500).json(getErrorResponseObject("Something went wrong"));
+        if (error instanceof GatewayError) {
+            response.status(error.statusCode).json({
+                error: error.type,
+                message: error.message
+            });
+        } else {
+            response.status(502).json({error: 'Something went wrong'});
+        }
     }
 }

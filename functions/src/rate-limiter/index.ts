@@ -5,6 +5,7 @@ import {rateLimiterSettings, CustomRateLimiterSettings, RateLimitMapData} from "
 
 // importing cleanup service
 import {cleaupService} from "../utility/cleanup-service";
+import { ErrorType, GatewayError } from "../error";
 
 export function inMemoryRateLimiter(extraOptions?: CustomRateLimiterSettings) {
     const rateSettings = {...rateLimiterSettings, ...extraOptions};
@@ -49,7 +50,7 @@ export function inMemoryRateLimiter(extraOptions?: CustomRateLimiterSettings) {
             const now = Date.now();
 
             if (!requestKey) {
-                throw Error("Invalid request no IP detected");
+                throw new GatewayError(`Cannot determine request id`, ErrorType.VALIDATION_ERROR, 400);
             }
 
             if (!rateSettings.timeWindow || rateSettings.timeWindow <= 0) throw new Error('timeWindow must be > 0');
@@ -78,11 +79,8 @@ export function inMemoryRateLimiter(extraOptions?: CustomRateLimiterSettings) {
                 response.setHeader('X-RateLimit-Reset', String(Math.floor((now + waitPeriod) / 1000)));
                 response.setHeader('X-RateLimit-Limit', String(rateSettings.tokens));
                 response.setHeader('X-RateLimit-Remaining', String(Math.floor(currentRequestData.currentTokensAvailable)));
-                
-                return response.status(429).json({
-                    success: false,
-                    error: 'Too many requests'
-                });
+
+                throw new GatewayError(`Too many requests`, ErrorType.RATE_LIMIT_EXCEEDED, 429);
             }
             
             currentRequestData.currentTokensAvailable = currentRequestData.currentTokensAvailable - rateSettings.costOfRequest;
@@ -101,10 +99,14 @@ export function inMemoryRateLimiter(extraOptions?: CustomRateLimiterSettings) {
 
             next();
         } catch(error: any) {
-            return response.status(500).json({
-                success:false,
-                error: error.message
-            });
+            if (error instanceof GatewayError) {
+                response.status(error.statusCode).json({
+                    error: error.type,
+                    message: error.message
+                });
+            } else {
+                response.status(502).json({error: error.message || 'Gateway hiccup—Worker said no.'});
+            }
         }
     };
 }

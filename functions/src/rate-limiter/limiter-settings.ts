@@ -1,4 +1,5 @@
 import {Request} from "express";
+import { ErrorType, GatewayError } from "../error";
 
 export interface CustomRateLimiterSettings {
     costOfRequest: number,
@@ -22,7 +23,7 @@ export const rateLimiterSettings = {
         const fromId = body?.message?.from?.id;
 
         if (typeof fromId !== "number") {
-            throw new Error(`Invalid request. You are in wrong place.`);
+            throw new GatewayError(`Invalid request. You are in wrong place.`, ErrorType.VALIDATION_ERROR, 401);
         }
 
         return String(fromId);

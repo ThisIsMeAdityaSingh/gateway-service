@@ -1,6 +1,7 @@
 import express, {Request, Response} from "express";
 import fetch from "node-fetch";
 import { verifyTelegramRequest } from "../../middlewares/verify-telegram-request";
+import { ErrorType, GatewayError } from "../../error";
 
 const router = express.Router();
 
@@ -9,7 +10,7 @@ router.post("/", verifyTelegramRequest, async function(request: Request, respons
     const workerHost = process.env.MAIN_SERVICE_HOST;
 
     if (!workerUrl || !workerHost) {
-        throw new Error(`Service worker and host are not defined`);
+        throw new GatewayError(`Cannot determine upstream service worker`, ErrorType.UPSTREAM_ERROR, 400);
     }
 
     try {
@@ -32,11 +33,18 @@ router.post("/", verifyTelegramRequest, async function(request: Request, respons
             body: JSON.stringify(request.body)
         });
         const result = await serviceResponse.json();
+        const statusCode = serviceResponse.status && serviceResponse.status >= 200 && serviceResponse.status < 600 ? serviceResponse.status : 200;
 
-        response.status(serviceResponse.status || 200).json(result).end();
+        response.status(statusCode).json(result).end();
     } catch(error) {
-        console.error('Proxy error:', error);
-        response.status(502).json({ error: 'Gateway hiccup—Worker said no.' });
+        if (error instanceof GatewayError) {
+            response.status(error.statusCode).json({
+                error: error.type,
+                message: error.message
+            });
+        } else {
+            response.status(502).json({error: 'Gateway hiccup—Worker said no'});
+        }
     }
 })
 

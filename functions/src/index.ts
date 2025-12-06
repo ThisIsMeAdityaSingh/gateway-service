@@ -4,7 +4,7 @@ import {onRequest} from "firebase-functions/https";
 // importing app
 import serverApp from "./controller";
 
-setGlobalOptions({ maxInstances: 4 });
+setGlobalOptions({ maxInstances: 2 });
 
 export const expressAppHandler = onRequest(
     {
