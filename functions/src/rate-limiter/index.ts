@@ -45,10 +45,10 @@ export function inMemoryRateLimiter(extraOptions?: CustomRateLimiterSettings) {
                 return next();
             }
             
-            const requestIp = rateSettings.requestIdGenerator(request);
+            const requestKey = rateSettings.requestIdGenerator(request);
             const now = Date.now();
 
-            if (!requestIp) {
+            if (!requestKey) {
                 throw Error("Invalid request no IP detected");
             }
 
@@ -56,7 +56,7 @@ export function inMemoryRateLimiter(extraOptions?: CustomRateLimiterSettings) {
             if (!rateSettings.maxRefilTokens || rateSettings.maxRefilTokens <= 0) throw new Error('maxRefilTokens must be > 0');
 
             // check if this ip has made request before or not
-            let currentRequestData = requestMap.get(requestIp);
+            let currentRequestData = requestMap.get(requestKey);
             const costOfRequest = Math.max(1, rateSettings.costOfRequest);
 
             if (!currentRequestData) {
@@ -89,7 +89,7 @@ export function inMemoryRateLimiter(extraOptions?: CustomRateLimiterSettings) {
             if (currentRequestData.currentTokensAvailable < 0) {
                 currentRequestData.currentTokensAvailable = 0;
             }
-            requestMap.set(requestIp, currentRequestData);
+            requestMap.set(requestKey, currentRequestData);
 
             if (tokensPerMs > 0) {
                 const msUntilOne = Math.ceil(Math.max(0, 1 - (currentRequestData.currentTokensAvailable % 1)) / tokensPerMs);
@@ -100,10 +100,10 @@ export function inMemoryRateLimiter(extraOptions?: CustomRateLimiterSettings) {
             response.setHeader('X-RateLimit-Remaining', String(Math.floor(currentRequestData.currentTokensAvailable)));
 
             next();
-        } catch(error) {
+        } catch(error: any) {
             return response.status(500).json({
                 success:false,
-                error: "Rate server error"
+                error: error.message
             });
         }
     };

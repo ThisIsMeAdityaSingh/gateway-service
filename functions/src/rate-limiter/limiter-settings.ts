@@ -17,6 +17,15 @@ export const rateLimiterSettings = {
     maxRefilTokens: 10,
     costOfRequest: 1,
     cleanUpWindow: 10 * 60 * 1000, // clean up memory every 10 mins
-    requestIdGenerator: (request: Request) => request.ip,
+    requestIdGenerator: (request: Request) => {
+        const body = request.body;
+        const fromId = body?.message?.from?.id;
+
+        if (typeof fromId !== "number") {
+            throw new Error(`Invalid request. You are in wrong place.`);
+        }
+
+        return String(fromId);
+    },
     skip: (request: Request) => false
 }
