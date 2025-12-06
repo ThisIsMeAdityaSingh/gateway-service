@@ -9,7 +9,10 @@ app.use(express.json());
 app.use(inMemoryRateLimiter());
 
 app.post('/telegram-webhook', verifyTelegramRequest, async function(request: Request, response: Response) {
-    
+    response.status(200).json({
+        success: true,
+        message: "Got here!"
+    });
 });
 
 app.all('*', async function(request: Request, response: Response) {
