@@ -1,17 +1,18 @@
 import {Request, Response, NextFunction} from "express";
 import { ErrorType, GatewayError } from "../error";
+import { performTimeSafeEquals } from "../utility/time-safe-equals";
 
-const TELEGRAM_SECRET = process.env.TELEGRAM_SECRET;
 
 export async function verifyTelegramRequest(request: Request, response: Response, next: NextFunction) {
     try {
-        const token = request.header('x-telegram-bot-api-secret-token');
-
+        const token = request.header('x-telegram-bot-api-secret-token') as string;
+        
+        const TELEGRAM_SECRET = process.env.TELEGRAM_SECRET as string;
         if (!TELEGRAM_SECRET) {
             throw new GatewayError("Server misconfiguration", ErrorType.CONFIGURATION_ERROR, 400);
         }
 
-        if (token !== TELEGRAM_SECRET) {
+        if (!performTimeSafeEquals(token, TELEGRAM_SECRET)) {
             throw new GatewayError("Unauthorized", ErrorType.VALIDATION_ERROR, 400);
         }
 

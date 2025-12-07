@@ -8,7 +8,7 @@ setGlobalOptions({ maxInstances: 2 });
 
 export const expressAppHandler = onRequest(
     {
-        secrets: ['TELEGRAM_SECRET', 'MAIN_SERVICE_ENDPOINT', 'MAIN_SERVICE_HOST'],
+        secrets: ['TELEGRAM_SECRET', 'MAIN_SERVICE_ENDPOINT', 'MAIN_SERVICE_HOST', 'LOGGING_SERVICE_TOKEN'],
         memory: '128MiB',
         timeoutSeconds: 60
     },

@@ -5,16 +5,17 @@ import { inMemoryRateLimiter } from "../rate-limiter";
 
 // telegram router
 import telegramRouter from "./telegram";
+// logging route
+import loggerRouter from "./logging";
+import { loggingRateLimiterOverrideOptions } from "../logging-service/rate-limiter-service";
 
 const app = express();
 app.use(express.json({ limit: '5kb' }));
 app.use(express.urlencoded({ limit: '5kb', extended: true }));
 
-// custom in-memory rate limiter
-app.use(inMemoryRateLimiter());
-
 // Mount telegram router at /telegram
-app.use('/telegram', telegramRouter);
+app.use('/telegram', inMemoryRateLimiter(), telegramRouter);
+app.use('/logger', inMemoryRateLimiter(loggingRateLimiterOverrideOptions), loggerRouter);
 
 app.use((request: Request, response: Response) => {
     const method = request.method;
