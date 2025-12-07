@@ -26,7 +26,11 @@ export async function verifyLoggingRequest(request: Request, response: Response,
             throw new GatewayError("cannot verify request", ErrorType.CONFIGURATION_ERROR, 500);
         }
 
-        if (!performTimeSafeEquals(clientSecret, availableSecret!)) {
+        if (!availableSecret) {
+            throw new GatewayError("cannot verify request", ErrorType.CONFIGURATION_ERROR, 500);
+        }
+
+        if (!performTimeSafeEquals(clientSecret, availableSecret)) {
             throw new GatewayError("unauthorized request", ErrorType.VALIDATION_ERROR, 401);
         }
 
@@ -38,7 +42,7 @@ export async function verifyLoggingRequest(request: Request, response: Response,
                 message: error.message
             });
         } else {
-            response.status(502).json({error: 'Something went wrong'});
+            response.status(502).json({error: 'Something went wrong'}).end();
         }
     }
 }
