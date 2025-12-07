@@ -27,9 +27,17 @@ router.post("/", verifyTelegramRequest, async function(request: Request, respons
         safeHeaders['host'] = workerHost;
         safeHeaders['x-forwarded-for'] = request.ip || (request.headers['x-forwarded-for'] as string) || '';
 
+        const customHeaders: Record<string, string> = {
+            'x-custom-request-sent-time': Date.now().toString()
+        }
+
+        if (process.env.EXTERNAL_SERVICE_CALL_KEY) {
+            customHeaders['x-custom-client-id'] = process.env.EXTERNAL_SERVICE_CALL_KEY;
+        }
+
         const serviceResponse = await fetch(workerUrl!, {
             method: "POST",
-            headers: safeHeaders,
+            headers: {...safeHeaders, ...customHeaders},
             body: JSON.stringify(request.body)
         });
         const result = await serviceResponse.json();
