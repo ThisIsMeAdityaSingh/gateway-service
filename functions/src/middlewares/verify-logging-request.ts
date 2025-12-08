@@ -1,6 +1,9 @@
 import {Request, Response, NextFunction} from "express";
 import { ErrorType, GatewayError } from "../error";
 import { performTimeSafeEquals } from "../utility/time-safe-equals";
+import { addLogToStore, ErrorLevels, ServiceErrorTypes } from "../logging-service";
+import { loggerDb } from "../admin";
+import { generateErrorLogPayload } from "../utility/generate-error-log-payload";
 
 export async function verifyLoggingRequest(request: Request, response: Response, next: NextFunction) {
     try {
@@ -35,7 +38,8 @@ export async function verifyLoggingRequest(request: Request, response: Response,
         }
 
         return next();
-    } catch(error) {
+    } catch(error: any) {
+        addLogToStore(loggerDb, generateErrorLogPayload(ErrorLevels.ERROR, error.message, error.stack || "log verification", ServiceErrorTypes.GENRAL_ERROR));
         if (error instanceof GatewayError) {
             response.status(error.statusCode).json({
                 error: error.type,

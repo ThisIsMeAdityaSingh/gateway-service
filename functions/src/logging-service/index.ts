@@ -2,14 +2,14 @@ import admin from "firebase-admin";
 import { ErrorType, GatewayError } from "../error";
 import { isEmptyObject } from "../utility";
 
-enum ErrorLevels {
+export enum ErrorLevels {
     CRITICAL_ERROR = "CRITICAL_ERROR",
     ERROR = "ERROR",
     WARNING = "WARNING",
     INFO = "INFO"
 }
 
-enum ErrorSource {
+export enum ErrorSource {
     CLOUDFARE_WORKER = "CLOUDFARE_WORKER",
     FIREBASE_FUNCTION = "FIREBASE_FUNCTION"
 }
@@ -22,7 +22,9 @@ export enum ServiceErrorTypes {
     UNAUTHORIZED_ACCESS_ERROR = 'UNAUTHORIZED_ACCESS_ERROR',
     WRONG_METHOD_ERROR = 'WRONG_METHOD_ERROR',
     REQUEST_ERROR = 'REQUEST_ERROR',
-    GENRAL_ERROR = 'GENRAL_ERROR'
+    GENRAL_ERROR = 'GENRAL_ERROR',
+    RATE_LIMITER_ERROR = 'RATE_LIMITER_ERROR',
+    WORKER_CALL_SERVICE = 'WORKER_CALL_SERVICE'
 }
 
 export type LoggingErrorType = ErrorType | ServiceErrorTypes;
@@ -69,6 +71,5 @@ export async function addLogToStore(logDbInstance: admin.firestore.Firestore, pa
         timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    console.log(`insertion response`, insertionResponse);
     return insertionResponse;
 }

@@ -1,6 +1,9 @@
 import {Request, Response, NextFunction} from "express";
 import { ErrorType, GatewayError } from "../error";
 import { performTimeSafeEquals } from "../utility/time-safe-equals";
+import { addLogToStore, ErrorLevels, ServiceErrorTypes } from "../logging-service";
+import { loggerDb } from "../admin";
+import { generateErrorLogPayload } from "../utility/generate-error-log-payload";
 
 
 export async function verifyTelegramRequest(request: Request, response: Response, next: NextFunction) {
@@ -17,7 +20,8 @@ export async function verifyTelegramRequest(request: Request, response: Response
         }
 
         return next();
-    } catch(error) {
+    } catch(error: any) {
+        addLogToStore(loggerDb, generateErrorLogPayload(ErrorLevels.CRITICAL_ERROR, error.message, error.stack || "Telegram verification middleware", ServiceErrorTypes.TELEGRAM_ERROR))
         if (error instanceof GatewayError) {
             response.status(error.statusCode).json({
                 error: error.type,

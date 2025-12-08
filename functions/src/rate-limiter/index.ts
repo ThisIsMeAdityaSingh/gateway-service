@@ -6,24 +6,27 @@ import {rateLimiterSettings, CustomRateLimiterSettings, RateLimitMapData} from "
 // importing cleanup service
 import {cleanupService} from "../utility/cleanup-service";
 import { ErrorType, GatewayError } from "../error";
+import { addLogToStore, ErrorLevels, ServiceErrorTypes } from "../logging-service";
+import { loggerDb } from "../admin";
+import { generateErrorLogPayload } from "../utility/generate-error-log-payload";
 
 export function inMemoryRateLimiter(extraOptions?: CustomRateLimiterSettings) {
     const rateSettings = {...rateLimiterSettings, ...extraOptions};
 
     if (!rateSettings.timeWindow || rateSettings.timeWindow <= 0) {
-        throw new Error('timeWindow must be > 0');
+        throw new GatewayError('timeWindow must be > 0', ErrorType.CONFIGURATION_ERROR, 500);
     }
     if (!rateSettings.maxRefillTokens || rateSettings.maxRefillTokens <= 0) {
-        throw new Error('maxRefillTokens must be > 0');
+        throw new GatewayError('maxRefillTokens must be > 0', ErrorType.CONFIGURATION_ERROR, 500);
     }
     if (!rateSettings.tokens || rateSettings.tokens <= 0) {
-        throw new Error('tokens must be > 0');
+        throw new GatewayError('tokens must be > 0', ErrorType.CONFIGURATION_ERROR, 500);
     }
     if (rateSettings.costOfRequest !== undefined && rateSettings.costOfRequest <= 0) {
-        throw new Error('costOfRequest must be > 0');
+        throw new GatewayError('costOfRequest must be > 0', ErrorType.CONFIGURATION_ERROR, 500);
     }
     if (!rateSettings.requestIdGenerator || typeof rateSettings.requestIdGenerator !== 'function') {
-        throw new Error('requestIdGenerator must be a function');
+        throw new GatewayError('requestIdGenerator must be a function', ErrorType.CONFIGURATION_ERROR, 500);
     }
 
     const requestMap = new Map<string, RateLimitMapData>();
@@ -116,7 +119,9 @@ export function inMemoryRateLimiter(extraOptions?: CustomRateLimiterSettings) {
 
             next();
         } catch(error: any) {
+            addLogToStore(loggerDb, generateErrorLogPayload(ErrorLevels.CRITICAL_ERROR, error.message, error.stack || 'no-stack', ServiceErrorTypes.RATE_LIMITER_ERROR));
             if (error instanceof GatewayError) {
+                // I am considering that if this fails all application goes down, so I am categorizing this as critical error
                 response.status(error.statusCode).json({
                     error: error.type,
                     message: error.message

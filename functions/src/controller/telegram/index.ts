@@ -2,6 +2,9 @@ import express, {Request, Response} from "express";
 import fetch from "node-fetch";
 import { verifyTelegramRequest } from "../../middlewares/verify-telegram-request";
 import { ErrorType, GatewayError } from "../../error";
+import { addLogToStore, ErrorLevels, ServiceErrorTypes } from "../../logging-service";
+import { loggerDb } from "../../admin";
+import { generateErrorLogPayload } from "../../utility/generate-error-log-payload";
 
 const router = express.Router();
 
@@ -44,7 +47,8 @@ router.post("/", verifyTelegramRequest, async function(request: Request, respons
         const statusCode = serviceResponse.status && serviceResponse.status >= 200 && serviceResponse.status < 600 ? serviceResponse.status : 200;
 
         response.status(statusCode).json(result).end();
-    } catch(error) {
+    } catch(error: any) {
+        addLogToStore(loggerDb, generateErrorLogPayload(ErrorLevels.ERROR, error.message, error.stack || "Worker service", ServiceErrorTypes.WORKER_CALL_SERVICE))
         if (error instanceof GatewayError) {
             response.status(error.statusCode).json({
                 error: error.type,
