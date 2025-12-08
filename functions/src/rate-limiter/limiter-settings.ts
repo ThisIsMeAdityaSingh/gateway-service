@@ -1,5 +1,4 @@
 import {Request} from "express";
-import { ErrorType, GatewayError } from "../error";
 
 export interface CustomRateLimiterSettings {
     costOfRequest: number,
@@ -15,18 +14,9 @@ export interface RateLimitMapData {
 export const rateLimiterSettings = {
     timeWindow: 60 * 1000, // giving a time window of 1 mins
     tokens: 10,
-    maxRefilTokens: 10,
+    maxRefillTokens: 10,
     costOfRequest: 1,
     cleanUpWindow: 10 * 60 * 1000, // clean up memory every 10 mins
-    requestIdGenerator: (request: Request) => {
-        const body = request.body;
-        const fromId = body?.message?.from?.id;
-
-        if (typeof fromId !== "number") {
-            throw new GatewayError(`Invalid request. You are in wrong place.`, ErrorType.VALIDATION_ERROR, 401);
-        }
-
-        return String(fromId);
-    },
+    requestIdGenerator: (request: Request) => crypto.randomUUID(),
     skip: (request: Request) => false
 }

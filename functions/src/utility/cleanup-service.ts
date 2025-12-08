@@ -1,4 +1,4 @@
-export function cleaupService(interval: number, callbackFn: Function) {
+export function cleanupService(interval: number, callbackFn: Function) {
     setInterval(() => {
         callbackFn()
     }, interval).unref();
