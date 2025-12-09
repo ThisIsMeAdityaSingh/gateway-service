@@ -1,12 +1,16 @@
 import crypto from "crypto";
 
-export function performTimeSafeEquals(sample1: string, sample2: string) {
-    const sample1Buffer = Buffer.from(sample1, 'utf-8');
-    const sample2Buffer = Buffer.from(sample2, 'utf-8');
-
-    if (sample1Buffer.length !== sample2Buffer.length || !crypto.timingSafeEqual(sample1Buffer, sample2Buffer)) {
+export function performTimeSafeEquals(sample1?: string, sample2?: string) {
+    if (typeof sample1 !== "string" || typeof sample2 !== "string") {
         return false;
     }
 
-    return true;
+    const buf1 = Buffer.from(sample1, 'utf-8');
+    const buf2 = Buffer.from(sample2, 'utf-8');
+
+    if (buf1.length !== buf2.length) {
+        return false;
+    }
+
+    return crypto.timingSafeEqual(buf1, buf2);
 }

@@ -38,6 +38,8 @@ router.post("/", verifyTelegramRequest, async function(request: Request, respons
             customHeaders['x-custom-client-id'] = process.env.EXTERNAL_SERVICE_CALL_KEY;
         }
 
+        addLogToStore(loggerDb, generateErrorLogPayload(ErrorLevels.INFO, "Forewarding to cloudfare worker", {...request.headers, payload: request.body}, ServiceErrorTypes.TELEGRAM_ERROR))
+
         const serviceResponse = await fetch(workerUrl!, {
             method: "POST",
             headers: {...safeHeaders, ...customHeaders},

@@ -8,7 +8,11 @@ import { generateErrorLogPayload } from "../utility/generate-error-log-payload";
 
 export async function verifyTelegramRequest(request: Request, response: Response, next: NextFunction) {
     try {
-        const token = request.header('x-telegram-bot-api-secret-token') as string;
+        const token = request.header('x-telegram-bot-api-secret-token');
+        
+        if (!token || typeof token !== "string") {
+            throw new GatewayError("No telegram token signature", ErrorType.CONFIGURATION_ERROR, 400);
+        }
         
         const TELEGRAM_SECRET = process.env.TELEGRAM_SECRET as string;
         if (!TELEGRAM_SECRET) {
