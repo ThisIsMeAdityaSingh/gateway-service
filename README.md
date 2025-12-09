@@ -31,7 +31,7 @@ Telegram Webhook → Gateway Service → Main Service Worker
 
 1. **Clone the repository**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/ThisIsMeAdityaSingh/gateway-service.git
    cd gateway-service
    ```
 
