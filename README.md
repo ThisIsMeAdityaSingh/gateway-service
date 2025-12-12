@@ -1,229 +1,147 @@
 # Gateway Service
 
-A robust Firebase Functions-based API gateway that serves as a secure proxy between Telegram webhooks and your main service. Built with TypeScript, featuring rate limiting, request verification, and automatic cleanup.
+A high-performance, resilient Firebase Functions-based API gateway designed to securely proxy and rate-limit traffic between Telegram webhooks and downstream services. Built with TypeScript, it implements a custom in-memory token bucket rate limiter, strict request verification, and header sanitization.
 
-## 🚀 Features
+## �️ Tech Stack
 
-- **Telegram Webhook Proxy**: Securely receives and forwards Telegram webhooks to your main service
-- **Rate Limiting**: In-memory rate limiter with configurable settings (10 requests/minute per user by default)
-- **Request Verification**: Validates incoming Telegram requests using secret tokens
-- **Header Management**: Safely forwards HTTP headers while filtering hop-by-hop headers
-- **Memory Management**: Automatic cleanup of old rate limit data to prevent memory leaks
+- **Runtime**: Node.js 24 (on Firebase Functions gen 2)
+- **Framework**: Express.js 5.2.1
+- **Language**: TypeScript 5.9
+- **Core Dependencies**:
+  - `firebase-admin`: For Firestore integration (logging)
+  - `firebase-functions`: Serverless runtime
+  - `node-fetch`: Upstream HTTP requests
+- **Testing**: Jest + Supertest
 
-## 🏗️ Architecture
+## 🏗️ Technical Architecture
 
+The service operates as a middleware-heavy Express application deployed on Firebase Cloud Functions.
+
+```mermaid
+graph TD
+    A[Telegram Webhook] -->|POST| B(Firebase Function Endpoint)
+    B --> C{Request Verifier}
+    C -->|Invalid Token| D[401 Unauthorized]
+    C -->|Valid| E{Rate Limiter}
+    E -->|Limit Exceeded| F[429 Too Many Requests]
+    E -->|Allowed| G[Proxy Controller]
+    G --> H[Header Sanitizer]
+    H --> I[Upstream Dispatcher]
+    I -->|HTTP POST| J[Main Service Worker]
+    J -->|Response| I
+    I -->|Response| A
+    
+    subgraph "Observability"
+    K[Firestore Logger]
+    B -.->|Log| K
+    E -.->|Log| K
+    G -.->|Log| K
+    end
 ```
-Telegram Webhook → Gateway Service → Main Service Worker
-                      ↓
-               Rate Limiter
-               Request Verifier
-               Header Filtering
-```
 
-## 📋 Prerequisites
+### Request Lifecycle
 
-- Node.js 24+
-- Firebase CLI
-- A Firebase project
-- Telegram bot token and webhook secret
+1.  **Entry**: Request hits the Firebase Function entry point.
+2.  **Verification**: `verifyTelegramRequest` middleware checks the `x-telegram-bot-api-secret-token` header against the secure `TELEGRAM_SECRET` env var.
+3.  **Rate Limiting**: `inMemoryRateLimiter` ensures fair usage per Telegram User ID.
+4.  **Header Processing**:
+    - **Stripping**: Removes HTTP hop-by-hop headers (e.g., `connection`, `keep-alive`, `transfer-encoding`) to prevent proxy interference.
+    - **Injection**: Adds `x-custom-request-sent-time` and `x-custom-client-id`.
+    - **Forwarding**: Preserves `Content-Type` and strict `Host` routing.
+5.  **Proxying**: Forwards the payload to `MAIN_SERVICE_ENDPOINT`.
 
-## 🛠️ Installation
+## ⚡ Deep Dive: Rate Limiting
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/ThisIsMeAdityaSingh/gateway-service.git
-   cd gateway-service
-   ```
+The service implements a **Token Bucket Algorithm** with lazy refilling for high efficiency and low overhead.
 
-2. **Install dependencies**
-   ```bash
-   cd functions
-   npm install
-   ```
+### Implementation Details
+- **Storage**: In-memory `Map<string, RateLimitMapData>`.
+- **Key Generation**: Unique `from.id` from the Telegram message body.
+- **Algorithm**:
+  - **Lazy Refill**: Tokens are recalculated only when a request arrives, based on `(now - lastRefillTime) * refillRate`.
+  - **Burst Handling**: Capacitated bucket allows short bursts up to `maxTokens`.
+- **Memory Management**: A dedicated `cleanupService` runs periodically (default: 10 mins) to iterate through the Map and evict stale entries (users inactive > `cleanUpWindow`), preventing memory leaks in long-running function instances.
 
-3. **Configure Firebase**
-   ```bash
-   firebase login
-   firebase init functions
-   ```
+### Response Headers
+When rate limits are triggered or checked, standard `X-RateLimit-*` headers are injected:
+- `X-RateLimit-Limit`: Max tokens allowed (bucket capacity).
+- `X-RateLimit-Remaining`: Current tokens available.
+- `X-RateLimit-Reset`: Unix timestamp when the bucket will be fully refilled.
+- `Retry-After`: Seconds to wait before retrying (on 429).
+
+## 📊 Logging & Observability
+
+The service uses a structured logging pattern via `addLogToStore`. Logs are persisted to a Firestore collection (`loggerDb`) rather than just `console.log`.
+
+**Log Levels**:
+- `INFO`: Standard operational events (e.g., forwarding request).
+- `ERROR`: Recoverable errors (e.g., upstream service hiccup).
+- `CRITICAL_ERROR`: System stability threats (e.g., rate limiter misconfiguration).
 
 ## ⚙️ Configuration
 
 ### Environment Variables
+Manage these via `firebase functions:secrets:set`.
 
-Set these secrets in your Firebase Functions configuration:
-
-```bash
-# Telegram webhook secret token
-firebase functions:secrets:set TELEGRAM_SECRET
-
-# Main service endpoint URL
-firebase functions:secrets:set MAIN_SERVICE_ENDPOINT
-
-# Main service host header
-firebase functions:secrets:set MAIN_SERVICE_HOST
-```
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `TELEGRAM_SECRET` | Secret token expected in `x-telegram-bot-api-secret-token` | Yes |
+| `MAIN_SERVICE_ENDPOINT` | Full URL of the upstream service | Yes |
+| `MAIN_SERVICE_HOST` | Host header to send to upstream | Yes |
+| `EXTERNAL_SERVICE_CALL_KEY` | Value for `x-custom-client-id` header sent upstream | No |
 
 ### Rate Limiter Settings
-
-The default rate limiter allows 10 requests per minute per Telegram user. You can customize this in `functions/src/rate-limiter/limiter-settings.ts`:
-
+Configurable in `functions/src/rate-limiter/limiter-settings.ts`:
 ```typescript
 export const rateLimiterSettings = {
-    timeWindow: 60 * 1000,      // 1 minute window
-    tokens: 10,                 // Max tokens per window
-    maxRefilTokens: 10,         // Tokens to refill
-    costOfRequest: 1,           // Cost per request
-    cleanUpWindow: 10 * 60 * 1000, // Cleanup every 10 minutes
-    // ... other settings
+    timeWindow: 60 * 1000,      // Window size (ms)
+    tokens: 10,                 // Bucket capacity (Burst size)
+    maxRefilTokens: 10,         // Refill rate per window
+    costOfRequest: 1,           // Tokens consumed per request
+    cleanUpWindow: 10 * 60 * 1000 // Stale data eviction interval
 };
 ```
 
-## 🚀 Deployment
+## 🚀 Development & Deployment
 
-1. **Build the project**
-   ```bash
-   npm run build
-   ```
+### Prerequisites
+- Node.js 24+
+- Firebase CLI (`npm i -g firebase-tools`)
 
-2. **Deploy to Firebase**
-   ```bash
-   npm run deploy
-   ```
-
-3. **Check logs**
-   ```bash
-   npm run logs
-   ```
-
-## 🧪 Development
-
-### Local Development
-
-1. **Start the emulator**
-   ```bash
-   npm run serve
-   ```
-
-2. **Run tests**
-   ```bash
-   npm test
-   ```
-
-3. **Lint code**
-   ```bash
-   npm run lint
-   ```
-
-### Project Structure
-
+### Local Emulation
+Test the full logic locally including Firestore triggers and logs.
+```bash
+cd functions
+npm run serve
 ```
-functions/
-├── src/
-│   ├── controller/
-│   │   ├── index.ts              # Main Express app setup
-│   │   └── telegram/
-│   │       └── index.ts          # Telegram webhook handler
-│   ├── middlewares/
-│   │   └── verify-telegram-request.ts  # Request verification
-│   ├── rate-limiter/
-│   │   ├── index.ts              # Rate limiter implementation
-│   │   └── limiter-settings.ts   # Rate limiter configuration
-│   ├── utility/
-│   │   ├── cleanup-service.ts    # Memory cleanup service
-│   │   └── index.ts              # Utility functions
-│   ├── tests/                    # Test files
-│   └── index.ts                  # Firebase Functions entry point
-├── package.json
-├── tsconfig.json
-└── jest.config.cjs
+
+### Deployment
+Deploys with strict Node.js 24 runtime and 128MB memory allocation.
+```bash
+npm run deploy
 ```
 
 ## 🔒 Security Features
 
-- **Request Verification**: Validates Telegram webhook authenticity using secret tokens
-- **Rate Limiting**: Prevents abuse with configurable per-user limits
-- **Header Filtering**: Removes sensitive hop-by-hop headers before forwarding
-- **Input Validation**: Validates Telegram user IDs and request structure
+1.  **Secret Validation**: Zero-trust approach; requests without the correct Telegram secret are rejected immediately.
+2.  **Header Sanitization**: Explicitly removes headers that could confuse upstream proxies:
+    - `connection`, `keep-alive`, `proxy-authenticate`, `proxy-authorization`, `te`, `trailer`, `transfer-encoding`, `upgrade`.
+3.  **Strict Typing**: Full TypeScript coverage (`src/types`) ensures compile-time safety for request bodies and error handling.
 
-## 📊 Rate Limiting
-
-The service implements a token bucket algorithm:
-- Each Telegram user gets 10 tokens per minute
-- Each request costs 1 token
-- Tokens refill gradually over time
-- Exceeded limits return HTTP 429 with `Retry-After` header
-
-## 🧪 Testing
-
-Run the test suite:
-
-```bash
-npm test
-```
-
-Tests cover:
-- Rate limiting functionality
-- Request validation
-- Error handling
-- Token refill logic
-
-## 📝 API Endpoints
+## 📝 API Contract
 
 ### POST /telegram
 
-Receives Telegram webhooks and proxies them to your main service.
+**Headers**
+- `x-telegram-bot-api-secret-token`: [STRING] Auth token.
 
-**Headers:**
-- `x-telegram-bot-api-secret-token`: Your Telegram webhook secret
-- `Content-Type`: `application/json`
+**Response Codes**
+- `200 OK`: Proxy success.
+- `400 Bad Request`: Missing upstream configuration or invalid request.
+- `401 Unauthorized`: Invalid verification secret.
+- `429 Too Many Requests`: Rate limit exceeded.
+- `502 Bad Gateway`: Upstream service failed or unreachable.
 
-**Rate Limits:**
-- 10 requests per minute per Telegram user
+## � License
 
-**Response:**
-- `200`: Success (proxied response from main service)
-- `401`: Unauthorized (invalid secret token)
-- `429`: Too Many Requests (rate limit exceeded)
-- `502`: Gateway Error (main service unavailable)
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Run the test suite
-6. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🆘 Troubleshooting
-
-### Common Issues
-
-**"Server misconfigured" error:**
-- Ensure all required secrets are set in Firebase Functions configuration
-
-**Rate limiting not working:**
-- Check that Telegram requests include valid user IDs in `body.message.from.id`
-
-**Deployment fails:**
-- Run `npm run lint` and `npm run build` locally first
-- Ensure Firebase project is properly configured
-
-**Webhook not receiving requests:**
-- Verify Telegram webhook URL points to your deployed function
-- Check Firebase Functions logs for errors
-
-## 🔧 Firebase Functions Configuration
-
-The service is configured with:
-- **Memory**: 128MB
-- **Timeout**: 60 seconds
-- **Max Instances**: 4
-- **Runtime**: Node.js 24
-
-These settings are optimized for cost-efficiency while handling Telegram webhook traffic.
+MIT License.
