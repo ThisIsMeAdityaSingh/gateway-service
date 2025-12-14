@@ -1,4 +1,4 @@
-import express, {Request, Response} from "express";
+import express, { Request, Response } from "express";
 import fetch from "node-fetch";
 import { verifyTelegramRequest } from "../../middlewares/verify-telegram-request";
 import { ErrorType, GatewayError } from "../../error";
@@ -8,7 +8,7 @@ import { generateErrorLogPayload } from "../../utility/generate-error-log-payloa
 
 const router = express.Router();
 
-router.post("/", verifyTelegramRequest, async function(request: Request, response: Response) {
+router.post("/", verifyTelegramRequest, async function (request: Request, response: Response) {
     const workerUrl = process.env.MAIN_SERVICE_ENDPOINT;
     const workerHost = process.env.MAIN_SERVICE_HOST;
 
@@ -38,26 +38,27 @@ router.post("/", verifyTelegramRequest, async function(request: Request, respons
             customHeaders['x-custom-client-id'] = process.env.EXTERNAL_SERVICE_CALL_KEY;
         }
 
-        addLogToStore(loggerDb, generateErrorLogPayload(ErrorLevels.INFO, "Forewarding to cloudfare worker", {...request.headers, payload: request.body}, ServiceErrorTypes.TELEGRAM_ERROR))
+        addLogToStore(loggerDb, generateErrorLogPayload(ErrorLevels.INFO, "Forewarding to cloudfare worker", { ...request.headers, payload: request.body }, ServiceErrorTypes.TELEGRAM_ERROR))
 
         const serviceResponse = await fetch(workerUrl!, {
             method: "POST",
-            headers: {...safeHeaders, ...customHeaders},
+            headers: { ...safeHeaders, ...customHeaders },
             body: JSON.stringify(request.body)
         });
+        addLogToStore(loggerDb, generateErrorLogPayload(ErrorLevels.INFO, "Response: ", serviceResponse, ServiceErrorTypes.WORKER_CALL_SERVICE))
         const result = await serviceResponse.json();
         const statusCode = serviceResponse.status && serviceResponse.status >= 200 && serviceResponse.status < 600 ? serviceResponse.status : 200;
 
-        response.status(statusCode).json(result).end();
-    } catch(error: any) {
+        return response.status(statusCode).json(result).end();
+    } catch (error: any) {
         addLogToStore(loggerDb, generateErrorLogPayload(ErrorLevels.ERROR, error.message, error.stack || "Worker service", ServiceErrorTypes.WORKER_CALL_SERVICE))
         if (error instanceof GatewayError) {
-            response.status(error.statusCode).json({
+            return response.status(error.statusCode).json({
                 error: error.type,
                 message: error.message
             });
         } else {
-            response.status(502).json({error: 'Gateway hiccup—Worker said no'});
+            return response.status(502).json({ error: 'Gateway hiccup—Worker said no' });
         }
     }
 })
