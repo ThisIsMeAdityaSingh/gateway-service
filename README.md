@@ -141,7 +141,3 @@ npm run deploy
 - `401 Unauthorized`: Invalid verification secret.
 - `429 Too Many Requests`: Rate limit exceeded.
 - `502 Bad Gateway`: Upstream service failed or unreachable.
-
-## � License
-
-MIT License.
